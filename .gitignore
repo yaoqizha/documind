@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets — 千萬不要 commit 真實金鑰
+.env
+.env.local
+*.key
+
+# Eval 產出
+api/eval/reports/
+api/eval/testset_*.json
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Docker volumes (本機若有掛載)
+pgdata/

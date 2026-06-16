@@ -9,6 +9,9 @@ logger = logging.getLogger(__name__)
 
 TOP_K = int(os.getenv("RETRIEVER_TOP_K", "10"))
 TOP_N = int(os.getenv("RERANKER_TOP_N", "3"))
+# 多語言 CrossEncoder：mmarco-mMiniLMv2 對中文重排顯著優於英文版 ms-marco-MiniLM，
+# 且體積輕量（~470MB），對部署環境的記憶體友善。
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
 
 # CrossEncoder 模型（首次呼叫時懶載入）
 _reranker = None
@@ -18,8 +21,8 @@ def _get_reranker():
     global _reranker
     if _reranker is None:
         from sentence_transformers import CrossEncoder
-        logger.info("Loading CrossEncoder reranker model...")
-        _reranker = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+        logger.info(f"Loading CrossEncoder reranker: {RERANKER_MODEL}")
+        _reranker = CrossEncoder(RERANKER_MODEL)
         logger.info("Reranker model loaded")
     return _reranker
 

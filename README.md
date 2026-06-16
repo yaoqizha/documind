@@ -104,25 +104,27 @@ const reader = res.body.getReader()
 python -m eval.run_evaluation my_tenant 20
 ```
 
-### 目標指標
+### 指標與目標
 
-| 指標 | 目標 | 說明 |
-|------|------|------|
-| `faithfulness` | > **0.85** | 回答是否有文件根據（防幻覺） |
-| `answer_relevancy` | > **0.80** | 回答是否切題 |
-| `context_recall` | > **0.75** | 重要資訊是否被找到 |
+| 指標 | 目標 | 實測（baseline） | 說明 |
+|------|------|------|------|
+| `faithfulness` | > 0.85 | **0.634** | 回答是否有文件根據（防幻覺） |
+| `answer_relevancy` | > 0.80 | **0.687** | 回答是否切題 |
+| `context_recall` | > 0.75 | **0.700** | 重要資訊是否被找到 |
 
-### Reranker 效果（目標值，待實測）
+> 量測條件：5 題自動生成測試集、含 CrossEncoder Reranker、生成與評審皆用 `gemini-2.5-flash-lite`（2026-06）。
+> 報告產出於 `api/eval/reports/`。
 
-> ⚠️ 下表為**預期目標**，尚未以實際資料量測。實測腳本已就緒
-> （`python -m eval.run_evaluation <tenant> <N>`），跑出結果後將以真實數字取代。
+### 結果分析與改進方向（誠實基準）
 
-| 階段 | faithfulness（目標） |
-|------|-------------|
-| 無 Reranker（top-10 直送 LLM） | 待實測 |
-| 加 CrossEncoder Reranker（top-3） | 待實測 |
+這是**實際量測的 baseline，尚未達標**——刻意保留真實數字，因為從中定位問題比漂亮的數字更有價值：
 
-> 設計假設：CrossEncoder Reranker 從 top-10 候選精選 top-3，可顯著提升 faithfulness。
+- **主要拉低點是「檢索盲點」**：5 題中有 1 題（外部訓練費用核准層級）所需的 chunk 未被 Reranker 選進 top-3，導致回答「找不到」，該題三項指標近乎 0，把平均明顯拉低；其餘 4 題回答正確且有依據（faithfulness 約 0.79）。
+- **改進方向**：
+  1. 檢索召回——擴大 `RETRIEVER_TOP_K`、調整 chunk 大小／重疊、或換更強 embedding，降低相關段落漏選機率
+  2. 評審穩定度——以更強模型（`gemini-2.5-flash` / `pro`）當 RAGAS judge 並擴大測試集（20+ 題）降低單題歸零的變異
+  3. 生成忠實度——強化 prompt 的「僅根據提供片段作答」約束
+- **設計假設（待 A/B 量測）**：CrossEncoder Reranker 從 top-10 候選精選 top-3，預期提升 faithfulness；無 Reranker 對照組為下一步實驗。
 
 ---
 
@@ -207,7 +209,7 @@ documind/
 
 ## 面試展示重點
 
-1. **RAG 評估框架**：整合 RAGAS（faithfulness / answer_relevancy / context_recall），目標 faithfulness > 0.85；評估腳本已就緒，數字待實測填入
+1. **RAG 評估（已實測）**：整合 RAGAS，實測 baseline faithfulness 0.634 / answer_relevancy 0.687 / context_recall 0.700；並從結果定位出「檢索盲點」與具體改進方向（見 RAGAS 評估章節）——展現量測 → 分析 → 迭代的工程能力
 2. **Reranker 設計**：pgvector top-10 候選 → CrossEncoder 精選 top-3，提升回答忠實度
 3. **多租戶隔離**：`WHERE tenant_id = ?` 讓不同部門文件物理隔離（已實測：跨租戶查詢回傳 0 筆）
 4. **Agent 主動追問**：classifier node 判斷問題模糊度，自動決定是否追問

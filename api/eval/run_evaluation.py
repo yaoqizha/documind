@@ -217,8 +217,26 @@ def _build_ragas_models():
     return _make_ragas_llm(lc_llm, llm_provider), LangchainEmbeddingsWrapper(lc_emb)
 
 
+def _gemini_is_finished(response) -> bool:
+    """
+    判斷 Gemini 回應是否正常結束。
+    RAGAS 預設只認小寫 "stop"，但 Gemini 回傳大寫 "STOP"，會誤判為未完成。
+    這裡放寬：只要 finish_reason 屬於正常結束類別即視為完成。
+    """
+    ok = {"stop", "end_turn", "max_tokens", "length", "complete"}
+    for gen_list in response.generations:
+        for item in gen_list:
+            fr = (getattr(item, "generation_info", None) or {}).get("finish_reason")
+            if fr is None:
+                meta = getattr(getattr(item, "message", None), "response_metadata", {}) or {}
+                fr = meta.get("finish_reason") or meta.get("stop_reason")
+            if fr is not None and str(fr).lower() not in ok:
+                return False
+    return True
+
+
 def _make_ragas_llm(lc_llm, provider: str):
-    """包裝 RAGAS LLM。Google 供應商需特別處理 temperature 不相容問題。"""
+    """包裝 RAGAS LLM。Google 供應商需特別處理 temperature 與 finish_reason 不相容問題。"""
     from ragas.llms import LangchainLLMWrapper
 
     if provider != "google":
@@ -235,7 +253,7 @@ def _make_ragas_llm(lc_llm, provider: str):
                 [prompt], stop=stop, callbacks=callbacks
             )
 
-    return _GeminiSafeLLM(lc_llm)
+    return _GeminiSafeLLM(lc_llm, is_finished_parser=_gemini_is_finished)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -92,10 +94,13 @@ async def health():
     }
 
 
+# ── Frontend（單頁聊天 UI，由 FastAPI 直接 serve）──────────────
+
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
 @app.get("/")
 async def root():
-    return {
-        "name": "DocuMind API",
-        "docs": "/docs",
-        "health": "/health",
-    }
+    """回傳聊天前端頁面。"""
+    return FileResponse(os.path.join(STATIC_DIR, "index.html"))

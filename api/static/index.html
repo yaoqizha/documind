@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DocuMind — 企業文件智能問答</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel2: #273449;
+    --border: #334155; --text: #e2e8f0; --muted: #94a3b8;
+    --accent: #6366f1; --accent2: #818cf8; --user: #3b82f6;
+    --ok: #22c55e; --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 14px 22px; background: linear-gradient(90deg, #4f46e5, #7c3aed);
+    display: flex; align-items: center; gap: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.3);
+  }
+  header .logo { font-size: 22px; font-weight: 700; letter-spacing: .5px; }
+  header .tag { font-size: 12.5px; color: #ddd6fe; }
+  header .spacer { flex: 1; }
+  header .badge { font-size: 11px; background: rgba(255,255,255,.18); padding: 3px 9px; border-radius: 999px; }
+  .wrap { flex: 1; display: flex; min-height: 0; }
+  /* Sidebar */
+  aside {
+    width: 320px; background: var(--panel); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 18px; gap: 16px; overflow-y: auto;
+  }
+  .section-title { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; }
+  label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 5px; }
+  select, input[type=text] {
+    width: 100%; padding: 9px 11px; background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px;
+  }
+  .upload-box {
+    border: 1.5px dashed var(--border); border-radius: 10px; padding: 16px; text-align: center;
+    cursor: pointer; transition: .15s; font-size: 13px; color: var(--muted);
+  }
+  .upload-box:hover { border-color: var(--accent); color: var(--accent2); background: rgba(99,102,241,.06); }
+  .btn {
+    background: var(--accent); color: white; border: none; padding: 9px 14px; border-radius: 8px;
+    cursor: pointer; font-size: 14px; font-weight: 600; transition: .15s;
+  }
+  .btn:hover { background: var(--accent2); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .doc-list { display: flex; flex-direction: column; gap: 6px; }
+  .doc-item { background: var(--panel2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; }
+  .doc-item .fn { font-weight: 600; word-break: break-all; }
+  .doc-item .meta { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .hint { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
+  /* Chat */
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #messages { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
+  .msg { display: flex; gap: 12px; max-width: 820px; }
+  .msg.user { align-self: flex-end; flex-direction: row-reverse; }
+  .avatar { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .avatar.bot { background: var(--accent); }
+  .avatar.me { background: var(--user); }
+  .bubble { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 12px 15px; font-size: 14.5px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; }
+  .msg.user .bubble { background: #1e3a8a; border-color: #2563eb; }
+  .status { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .pill { background: var(--panel2); border: 1px solid var(--border); border-radius: 999px; padding: 2px 9px; font-size: 11px; }
+  .pill.active { border-color: var(--accent); color: var(--accent2); }
+  .pill.done { border-color: var(--ok); color: var(--ok); }
+  .sources { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .src { background: var(--panel2); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+  .src .head { display: flex; justify-content: space-between; color: var(--accent2); font-weight: 600; margin-bottom: 3px; }
+  .src .score { color: var(--muted); font-weight: 400; }
+  .src .ex { color: var(--muted); line-height: 1.5; max-height: 60px; overflow: hidden; }
+  .clarify { background: rgba(245,158,11,.1); border: 1px solid var(--warn); color: #fcd34d; border-radius: 10px; padding: 12px 15px; font-size: 14px; }
+  /* Input */
+  .composer { border-top: 1px solid var(--border); padding: 14px 22px; display: flex; gap: 10px; background: var(--panel); }
+  .composer input { flex: 1; padding: 12px 14px; font-size: 15px; }
+  .empty { text-align: center; color: var(--muted); margin: auto; max-width: 460px; }
+  .empty h2 { color: var(--text); font-weight: 600; }
+  .empty .ex-q { display: inline-block; margin: 4px; padding: 6px 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; font-size: 13px; }
+  .empty .ex-q:hover { border-color: var(--accent); color: var(--accent2); }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--panel2); border: 1px solid var(--border); padding: 10px 18px; border-radius: 8px; font-size: 13px; opacity: 0; transition: .25s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">📑 DocuMind</span>
+  <span class="tag">企業內部文件智能問答 · RAG + Reranker + Agent</span>
+  <span class="spacer"></span>
+  <span class="badge" id="health">●&nbsp;連線中…</span>
+</header>
+
+<div class="wrap">
+  <aside>
+    <div>
+      <div class="section-title">租戶 / 部門</div>
+      <label>查詢與上傳都會綁定此 tenant（多租戶物理隔離）</label>
+      <input type="text" id="tenant" value="hr_dept" placeholder="例如 hr_dept">
+    </div>
+
+    <div>
+      <div class="section-title">上傳文件</div>
+      <input type="file" id="file" accept=".pdf,.md,.txt" style="display:none">
+      <div class="upload-box" id="uploadBox">
+        點此選擇檔案<br><span style="font-size:11px">支援 PDF / MD / TXT，上限 20MB</span>
+      </div>
+      <div id="fileName" class="hint" style="margin-top:8px"></div>
+      <button class="btn" id="uploadBtn" style="width:100%;margin-top:8px" disabled>上傳並建立索引</button>
+    </div>
+
+    <div>
+      <div class="section-title">已索引文件</div>
+      <div class="doc-list" id="docList"><div class="hint">尚無文件</div></div>
+    </div>
+
+    <div style="margin-top:auto">
+      <div class="hint">
+        架構：FastAPI · LangGraph Agent · pgvector(HNSW) · CrossEncoder Reranker · Gemini<br>
+        <a href="/docs" target="_blank" style="color:var(--accent2)">API 文件 (/docs)</a>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div id="messages">
+      <div class="empty" id="empty">
+        <h2>👋 問我關於公司文件的任何問題</h2>
+        <p>先在左側上傳文件，或直接試試以下問題：</p>
+        <div>
+          <span class="ex-q">員工到職滿兩年有幾天特別休假？</span>
+          <span class="ex-q">遠距工作每週最多幾天？</span>
+          <span class="ex-q">業務交際費每人每次上限多少？</span>
+        </div>
+      </div>
+    </div>
+    <div class="composer">
+      <input type="text" id="q" placeholder="輸入問題後按 Enter…" autocomplete="off">
+      <button class="btn" id="send">送出</button>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const tenantEl = $('#tenant'), msgs = $('#messages'), qEl = $('#q');
+let busy = false;
+
+function toast(t){ const e=$('#toast'); e.textContent=t; e.classList.add('show'); setTimeout(()=>e.classList.remove('show'),2200); }
+
+// ── Health ──
+fetch('/health').then(r=>r.json()).then(d=>{
+  const ok = d.status==='ok';
+  $('#health').textContent = (ok?'● ':'● ') + (ok?'服務正常':'資料庫異常');
+  $('#health').style.color = ok ? '#a7f3d0' : '#fca5a5';
+}).catch(()=>{ $('#health').textContent='● 無法連線'; });
+
+// ── Document list ──
+async function loadDocs(){
+  const t = tenantEl.value.trim(); if(!t) return;
+  try{
+    const r = await fetch('/api/v1/documents?tenant_id='+encodeURIComponent(t));
+    const docs = await r.json();
+    const el = $('#docList');
+    if(!docs.length){ el.innerHTML='<div class="hint">此租戶尚無文件</div>'; return; }
+    el.innerHTML = docs.map(d=>`<div class="doc-item"><div class="fn">${esc(d.filename)}</div><div class="meta">${d.chunk_count} chunks</div></div>`).join('');
+  }catch(e){ /* ignore */ }
+}
+tenantEl.addEventListener('change', loadDocs);
+loadDocs();
+
+// ── Upload ──
+const fileEl = $('#file');
+$('#uploadBox').onclick = ()=> fileEl.click();
+fileEl.onchange = ()=>{
+  if(fileEl.files.length){ $('#fileName').textContent='已選：'+fileEl.files[0].name; $('#uploadBtn').disabled=false; }
+};
+$('#uploadBtn').onclick = async ()=>{
+  if(!fileEl.files.length) return;
+  const t = tenantEl.value.trim(); if(!t){ toast('請先填租戶'); return; }
+  const fd = new FormData(); fd.append('file', fileEl.files[0]); fd.append('tenant_id', t);
+  $('#uploadBtn').disabled=true; $('#uploadBtn').textContent='上傳中…';
+  try{
+    const r = await fetch('/api/v1/documents', {method:'POST', body:fd});
+    const d = await r.json();
+    if(r.ok){ toast(`已索引 ${d.chunk_count} 個片段`); $('#fileName').textContent=''; fileEl.value=''; loadDocs(); }
+    else throw new Error(d.detail||'上傳失敗');
+  }catch(e){ toast('錯誤：'+e.message); }
+  $('#uploadBtn').textContent='上傳並建立索引'; $('#uploadBtn').disabled=true;
+};
+
+// ── Chat ──
+function esc(s){ return (s||'').replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+function addUser(text){
+  $('#empty')?.remove();
+  const d = document.createElement('div'); d.className='msg user';
+  d.innerHTML = `<div class="avatar me">🙋</div><div class="bubble">${esc(text)}</div>`;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+}
+function addBot(){
+  const d = document.createElement('div'); d.className='msg';
+  d.innerHTML = `<div class="avatar bot">🤖</div><div style="flex:1">
+    <div class="status" data-status><span class="pill" data-n="classifier">分類</span><span class="pill" data-n="retriever">檢索</span><span class="pill" data-n="generator">生成</span></div>
+    <div class="bubble" data-bubble></div><div class="sources" data-sources></div></div>`;
+  msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  return d;
+}
+
+document.querySelectorAll('.ex-q').forEach(b=> b.onclick=()=>{ qEl.value=b.textContent; ask(); });
+$('#send').onclick = ask;
+qEl.addEventListener('keydown', e=>{ if(e.key==='Enter') ask(); });
+
+async function ask(){
+  if(busy) return;
+  const query = qEl.value.trim(); if(!query) return;
+  const tenant_id = tenantEl.value.trim(); if(!tenant_id){ toast('請先填租戶'); return; }
+  busy=true; qEl.value=''; $('#send').disabled=true;
+  addUser(query);
+  const bot = addBot();
+  const bubble = bot.querySelector('[data-bubble]');
+  const srcEl = bot.querySelector('[data-sources]');
+  const statusEl = bot.querySelector('[data-status]');
+  const setNode = n => { const p = statusEl.querySelector(`[data-n="${n}"]`); if(p) p.classList.add('active'); };
+  const doneNode = () => statusEl.querySelectorAll('.pill.active').forEach(p=>{p.classList.remove('active');p.classList.add('done');});
+
+  try{
+    const res = await fetch('/api/v1/chat/stream', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({query, tenant_id})
+    });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder(); let buf='';
+    while(true){
+      const {done, value} = await reader.read();
+      if(done) break;
+      buf += dec.decode(value, {stream:true});
+      const parts = buf.split('\n\n'); buf = parts.pop();
+      for(const p of parts){
+        const line = p.trim(); if(!line.startsWith('data:')) continue;
+        let ev; try{ ev = JSON.parse(line.slice(5).trim()); }catch(_){ continue; }
+        if(ev.type==='node_start'){ setNode(ev.node); }
+        else if(ev.type==='answer_chunk'){ doneNode(); bubble.textContent += ev.content; }
+        else if(ev.type==='sources'){
+          srcEl.innerHTML = (ev.sources||[]).map(s=>`<div class="src"><div class="head"><span>${esc(s.filename)} · #${s.chunk_index}</span><span class="score">相關度 ${s.relevance_score}</span></div><div class="ex">${esc((s.excerpt||'').slice(0,120))}…</div></div>`).join('');
+        }
+        else if(ev.type==='clarification'){ doneNode(); bubble.outerHTML = `<div class="clarify">🤔 ${esc(ev.question)}</div>`; }
+        else if(ev.type==='error'){ doneNode(); bubble.textContent = '⚠️ 發生錯誤：'+ev.message; }
+        msgs.scrollTop = msgs.scrollHeight;
+      }
+    }
+    doneNode();
+  }catch(e){ bubble.textContent = '⚠️ 連線錯誤：'+e.message; }
+  busy=false; $('#send').disabled=false; qEl.focus();
+}
+</script>
+</body>
+</html>

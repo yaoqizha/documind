@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import asyncpg
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -17,17 +19,40 @@ EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
 _pool: asyncpg.Pool | None = None
 
 
-async def init_db(database_url: str) -> None:
-    """建立連線池並初始化資料表。已初始化則直接返回（冪等，供 CLI 腳本重複呼叫）。"""
+async def init_db(database_url: str, retries: int = 10, delay: float = 3.0) -> None:
+    """
+    建立連線池並初始化資料表。已初始化則直接返回（冪等，供 CLI 腳本重複呼叫）。
+    開機時對連線做重試：雲端平台（如 Railway）的私有網路在容器剛啟動時
+    可能尚未就緒，立即連線會被拒，需重試等待。
+    """
     global _pool
     if _pool is not None:
         return
-    _pool = await asyncpg.create_pool(
-        dsn=database_url,
-        min_size=2,
-        max_size=10,
-        command_timeout=60,
-    )
+
+    # 記錄連線目標（遮蔽密碼）方便除錯，可確認是否連到正確的資料庫主機
+    safe_url = re.sub(r"://([^:/@]+):[^@]*@", r"://\1:***@", database_url or "")
+    logger.info(f"Connecting to database: {safe_url}")
+
+    last_err: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            _pool = await asyncpg.create_pool(
+                dsn=database_url,
+                min_size=2,
+                max_size=10,
+                command_timeout=60,
+            )
+            break
+        except (OSError, asyncpg.PostgresError) as e:
+            last_err = e
+            logger.warning(
+                f"DB 連線第 {attempt}/{retries} 次失敗：{e!r}；{delay}s 後重試"
+            )
+            await asyncio.sleep(delay)
+
+    if _pool is None:
+        raise RuntimeError(f"無法連線資料庫（已重試 {retries} 次）：{last_err!r}")
+
     await _create_tables()
     logger.info("Database pool initialized")
 

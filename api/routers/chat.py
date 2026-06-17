@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import uuid
 
 from fastapi import APIRouter
@@ -71,7 +72,7 @@ async def chat_stream(request: ChatRequest):
                             {
                                 "filename": c.filename,
                                 "chunk_index": c.chunk_index,
-                                "relevance_score": round(c.rerank_score, 4),
+                                "relevance_score": _relevance(c.rerank_score),
                                 "excerpt": c.excerpt,
                             }
                             for c in output.get("retrieved_chunks", [])
@@ -118,7 +119,7 @@ async def chat(request: ChatRequest):
         Source(
             filename=c.filename,
             chunk_index=c.chunk_index,
-            relevance_score=round(c.rerank_score, 4),
+            relevance_score=_relevance(c.rerank_score),
             excerpt=c.excerpt,
         )
         for c in final_state.get("retrieved_chunks", [])
@@ -134,6 +135,11 @@ async def chat(request: ChatRequest):
 
 
 # ── Helpers ───────────────────────────────────────────────────
+
+def _relevance(logit: float) -> float:
+    """CrossEncoder logit → 0–1 相關度（sigmoid），供前端顯示更直覺。"""
+    return round(1.0 / (1.0 + math.exp(-logit)), 4)
+
 
 def _sse(data: dict) -> str:
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"

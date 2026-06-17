@@ -60,6 +60,25 @@ def _get_llm():
         )
 
 
+# ── Helpers ───────────────────────────────────────────────────
+
+def _parse_json_loose(text: str):
+    """
+    從 LLM 回應穩健解析 JSON：擷取第一個 { 到最後一個 }，
+    容忍 markdown code fence（```json ... ```）與前後雜訊。
+    解析失敗回傳 None。
+    """
+    if not isinstance(text, str):
+        return None
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        return json.loads(text[start:end + 1])
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
 # ── Node Functions ────────────────────────────────────────────
 
 async def classifier_node(state: AgentState) -> AgentState:
@@ -77,11 +96,11 @@ async def classifier_node(state: AgentState) -> AgentState:
     ]
     response = await llm.ainvoke(messages)
 
-    try:
-        result = json.loads(response.content)
-        state["needs_clarification"] = result.get("needs_clarification", False)
+    result = _parse_json_loose(response.content)
+    if result is not None:
+        state["needs_clarification"] = bool(result.get("needs_clarification", False))
         state["clarification_question"] = result.get("clarification_question", "")
-    except (json.JSONDecodeError, AttributeError):
+    else:
         # 解析失敗就繼續往下走，不中斷流程
         state["needs_clarification"] = False
         state["clarification_question"] = ""

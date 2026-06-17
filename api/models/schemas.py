@@ -20,6 +20,7 @@ class DocumentListItem(BaseModel):
     filename: str
     chunk_count: int
     created_at: datetime
+    is_shared: bool = False   # 是否為全公司共用文件（_shared 租戶）
 
 
 # ── Chat schemas ─────────────────────────────────────────────

@@ -58,8 +58,8 @@
 - [v] 文件列表：`curl "http://localhost:8000/api/v1/documents?tenant_id=hr_dept"`
 
 ## 7. 自動化測試 + 評估
-- [ ] 單元測試：`docker compose exec api python -m pytest tests/ -v` → 32 passed
-- [ ] RAGAS 評估（需 Gemini 額度）：
+- [v] 單元測試：`docker compose exec api python -m pytest tests/ -v` → 32 passed
+- [v] RAGAS 評估（需 Gemini 額度）：
   ```bash
   docker compose exec -e LLM_MODEL=gemini-2.5-flash-lite api \
     python -m eval.run_evaluation hr_dept 5

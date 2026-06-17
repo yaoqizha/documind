@@ -9,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 TOP_K = int(os.getenv("RETRIEVER_TOP_K", "10"))
 TOP_N = int(os.getenv("RERANKER_TOP_N", "3"))
+# 全公司共用文件的租戶；任何部門查詢時都會一併檢索到此命名空間
+SHARED_TENANT = os.getenv("SHARED_TENANT", "_shared")
 # 多語言 CrossEncoder：mmarco-mMiniLMv2 對中文重排顯著優於英文版 ms-marco-MiniLM，
 # 且體積輕量（~470MB），對部署環境的記憶體友善。
 RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
@@ -71,6 +73,11 @@ async def _semantic_search(
     # pgvector 格式：'[0.1, 0.2, ...]'
     vec_str = "[" + ",".join(str(v) for v in query_vec) + "]"
 
+    # 同時檢索該租戶與共用租戶（_shared）；共用文件全部門可見
+    tenants = [tenant_id]
+    if tenant_id != SHARED_TENANT:
+        tenants.append(SHARED_TENANT)
+
     sql = """
         SELECT
             content,
@@ -78,12 +85,12 @@ async def _semantic_search(
             chunk_index,
             1 - (embedding <=> $1::vector) AS cosine_similarity
         FROM document_chunks
-        WHERE tenant_id = $2
+        WHERE tenant_id = ANY($2::varchar[])
         ORDER BY embedding <=> $1::vector
         LIMIT $3
     """
     async with get_conn() as conn:
-        rows = await conn.fetch(sql, vec_str, tenant_id, top_k)
+        rows = await conn.fetch(sql, vec_str, tenants, top_k)
 
     return [dict(r) for r in rows]
 

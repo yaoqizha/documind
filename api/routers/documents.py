@@ -98,7 +98,12 @@ async def upload_document(
 
 @router.get("", response_model=list[DocumentListItem])
 async def list_documents(tenant_id: str):
-    """列出指定租戶的所有已上傳文件。"""
+    """列出指定租戶的文件，並一併列出全公司共用（_shared）文件。"""
+    from services.retriever import SHARED_TENANT
+    tenants = [tenant_id]
+    if tenant_id != SHARED_TENANT:
+        tenants.append(SHARED_TENANT)
+
     async with get_conn() as conn:
         rows = await conn.fetch(
             """
@@ -106,13 +111,14 @@ async def list_documents(tenant_id: str):
                 document_id::text,
                 filename,
                 COUNT(*) AS chunk_count,
-                MIN(created_at) AS created_at
+                MIN(created_at) AS created_at,
+                bool_or(tenant_id = $2) AS is_shared
             FROM document_chunks
-            WHERE tenant_id = $1
+            WHERE tenant_id = ANY($1::varchar[])
             GROUP BY document_id, filename
-            ORDER BY MIN(created_at) DESC
+            ORDER BY is_shared ASC, MIN(created_at) DESC
             """,
-            tenant_id,
+            tenants, SHARED_TENANT,
         )
     return [
         DocumentListItem(
@@ -120,6 +126,7 @@ async def list_documents(tenant_id: str):
             filename=row["filename"],
             chunk_count=row["chunk_count"],
             created_at=row["created_at"],
+            is_shared=row["is_shared"],
         )
         for row in rows
     ]

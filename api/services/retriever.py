@@ -14,6 +14,9 @@ SHARED_TENANT = os.getenv("SHARED_TENANT", "_shared")
 # 多語言 CrossEncoder：mmarco-mMiniLMv2 對中文重排顯著優於英文版 ms-marco-MiniLM，
 # 且體積輕量（~470MB），對部署環境的記憶體友善。
 RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+# Reranker 開關：低資源部署環境（如 Railway 免費層）可設 RERANK_ENABLED=false，
+# 改用 embedding 餘弦相似度直接取 top_n，避免載入 torch 導致 OOM／推論過慢。
+RERANK_ENABLED = os.getenv("RERANK_ENABLED", "true").lower() not in ("false", "0", "no")
 
 # CrossEncoder 模型（首次呼叫時懶載入）
 _reranker = None
@@ -49,6 +52,7 @@ async def retrieve(
     兩階段檢索：
     1. pgvector cosine 語意搜尋，取 top_k 候選
     2. CrossEncoder Reranker 重排序，取 top_n 最終結果
+       （RERANK_ENABLED=false 時跳過第 2 步，直接取餘弦相似度前 top_n）
     """
     # Step 1: 語意檢索
     query_vec = await embed_query(query)
@@ -58,9 +62,24 @@ async def retrieve(
         logger.warning(f"No candidates found for tenant={tenant_id}, query='{query[:50]}'")
         return []
 
-    # Step 2: Reranker
-    reranked = _rerank(query, candidates, top_n)
-    logger.info(f"Retrieved {len(candidates)} candidates → reranked to {len(reranked)}")
+    # Step 2: Reranker（可關閉）
+    if RERANK_ENABLED:
+        reranked = _rerank(query, candidates, top_n)
+        logger.info(f"Retrieved {len(candidates)} candidates → reranked to {len(reranked)}")
+    else:
+        # 不重排：candidates 已按 cosine 距離排序，直接取前 top_n
+        reranked = [
+            RetrievedChunk(
+                content=c["content"],
+                filename=c["filename"],
+                chunk_index=c["chunk_index"],
+                semantic_score=float(c["cosine_similarity"]),
+                rerank_score=float(c["cosine_similarity"]),
+                excerpt=c["content"][:200],
+            )
+            for c in candidates[:top_n]
+        ]
+        logger.info(f"Retrieved {len(candidates)} candidates → top {len(reranked)} (rerank disabled)")
     return reranked
 
 

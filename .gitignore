@@ -20,6 +20,9 @@ env/
 api/eval/reports/
 api/eval/testset_*.json
 
+# 本機私人筆記，不納入版控
+DEMO_SCRIPT.md
+
 # OS / IDE
 .DS_Store
 .idea/

@@ -5,6 +5,9 @@
 企業文件不能丟進 ChatGPT，但員工又需要快速查詢 SOP、法規、技術文件。  
 DocuMind 讓你安全地把文件留在自己的資料庫，用 RAG + Agent 回答問題。
 
+🔗 **線上 Demo**：https://documind-production-7465.up.railway.app  
+（部署於 Railway，內含聊天前端；選部門 → 直接提問。例：「員工到職滿兩年有幾天特別休假？」）
+
 ---
 
 ## 架構
@@ -154,24 +157,28 @@ pytest tests/ -v
 
 ## 部署到雲端（Railway）
 
-```bash
-# 1. 安裝 Railway CLI
-npm install -g @railway/cli
+本專案已部署於 Railway（[線上 Demo](https://documind-production-7465.up.railway.app)）。重點步驟與實戰經驗：
 
-# 2. 登入並部署
-railway login
-railway init
-railway up
+1. **資料庫**：用 `pgvector` 模板部署 Postgres（內建 pgvector extension，啟動時自動建立向量索引）。
+2. **API 服務**：從 GitHub repo 部署，**Root Directory 設為 `api`**（Dockerfile 在此）。
+3. **環境變數**（API 服務）：
+   ```
+   GOOGLE_API_KEY=<你的金鑰>
+   LLM_PROVIDER=google
+   LLM_MODEL=gemini-2.5-flash-lite
+   EMBEDDING_PROVIDER=google
+   EMBEDDING_MODEL=models/gemini-embedding-001
+   EMBEDDING_DIM=768
+   RERANK_ENABLED=false
+   # DATABASE_URL 引用 pgvector 的原始變數（避免巢狀引用無法跨服務解析）：
+   DATABASE_URL=postgresql://${{pgvector.POSTGRES_USER}}:${{pgvector.POSTGRES_PASSWORD}}@${{pgvector.RAILWAY_PRIVATE_DOMAIN}}:5432/${{pgvector.POSTGRES_DB}}
+   ```
 
-# 3. 設定環境變數
-railway variables set GOOGLE_API_KEY=AIza...
-railway variables set LLM_PROVIDER=google
-railway variables set LLM_MODEL=gemini-2.5-flash-lite
-railway variables set EMBEDDING_PROVIDER=google
-railway variables set EMBEDDING_MODEL=models/gemini-embedding-001
-railway variables set EMBEDDING_DIM=768
-railway variables set DATABASE_URL=<railway-postgres-url>
-```
+### 部署實戰筆記（踩過的坑）
+- **動態埠**：容器須監聽 `$PORT`（Dockerfile 用 `--port ${PORT:-8000}`），產生 Domain 時 target port 要與實際監聽埠一致。
+- **私有網路啟動時序**：容器剛啟動時 `*.railway.internal` 可能尚未就緒，故 `init_db` 內建**連線重試**。
+- **`DATABASE_URL` 引用**：直接引用 `${{pgvector.DATABASE_URL}}` 會因其值本身含巢狀引用而解析為空；改引用 pgvector 的原始變數（user/password/private-domain/db）即可。
+- **低資源 reranker**：免費層 CPU/RAM 跑 torch CrossEncoder 會 OOM／極慢，故線上設 `RERANK_ENABLED=false`，改用 embedding 餘弦相似度取 top-N（本機保留完整 reranker 與 RAGAS 評估）。
 
 ---
 

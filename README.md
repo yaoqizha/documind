@@ -220,13 +220,3 @@ documind/
 └── scripts/
     └── setup.sh                 一鍵環境設定
 ```
-
----
-
-## 面試展示重點
-
-1. **RAG 評估 + 工程迭代（已實測）**：整合 RAGAS，量測發現中文「檢索盲點」→ 定位根因為英文 Reranker → 換多語 Reranker → 再量測驗證：context_recall 0.70→**1.00**、answer_relevancy 0.69→**0.87**、faithfulness 0.63→0.72（見 RAGAS 章節）。完整展現「量測→分析→修正→驗證」的工程能力
-2. **Reranker 設計**：pgvector top-10 候選 → CrossEncoder 精選 top-3，提升回答忠實度
-3. **多租戶隔離 + 共用命名空間**：`WHERE tenant_id = ?` 讓部門文件物理隔離（已實測：跨部門查詢回傳 0 筆）；另設 `_shared` 命名空間放全公司共用文件，各部門查詢時自動一併檢索——兼顧隔離與共用
-4. **Agent 主動追問**：classifier node 判斷問題模糊度，模糊才追問、具體則直接回答
-5. **內建聊天前端**：單頁 Web UI，SSE 逐字串流、來源引用、部門切換、文件上傳，由 FastAPI 直接 serve（一個服務即可部署）

@@ -4,6 +4,9 @@ import os
 from typing import TypedDict, AsyncIterator
 
 from langgraph.graph import StateGraph, END
+from tenacity import (
+    retry, stop_after_attempt, wait_exponential, retry_if_exception,
+)
 
 from services.retriever import retrieve, RetrievedChunk
 from services.prompts import (
@@ -79,6 +82,32 @@ def _parse_json_loose(text: str):
         return None
 
 
+def _is_transient_llm_error(exc: BaseException) -> bool:
+    """
+    判斷是否為「暫時性」LLM 錯誤（值得重試）：
+    Gemini 503 過載（high demand）、429 限流、逾時等。
+    永久性錯誤（金鑰錯、參數錯）不重試，直接讓它報錯。
+    """
+    s = f"{type(exc).__name__} {exc}".lower()
+    keywords = (
+        "503", "unavailable", "high demand", "overloaded",
+        "429", "resource exhausted", "rate limit",
+        "deadline", "timeout", "temporarily",
+    )
+    return any(k in s for k in keywords)
+
+
+@retry(
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception(_is_transient_llm_error),
+    reraise=True,
+)
+async def _invoke_llm(llm, messages):
+    """呼叫 LLM；遇到暫時性錯誤（如 Gemini 503 過載）自動退避重試。"""
+    return await llm.ainvoke(messages)
+
+
 # ── Node Functions ────────────────────────────────────────────
 
 async def classifier_node(state: AgentState) -> AgentState:
@@ -94,7 +123,7 @@ async def classifier_node(state: AgentState) -> AgentState:
         SystemMessage(content=CLASSIFIER_SYSTEM),
         HumanMessage(content=CLASSIFIER_USER.format(query=state["query"])),
     ]
-    response = await llm.ainvoke(messages)
+    response = await _invoke_llm(llm, messages)
 
     result = _parse_json_loose(response.content)
     if result is not None:
@@ -153,7 +182,7 @@ async def generator_node(state: AgentState) -> AgentState:
             query=state["query"],
         )),
     ]
-    response = await llm.ainvoke(messages)
+    response = await _invoke_llm(llm, messages)
     state["answer"] = response.content
     state["node_trace"].append("generator")
     return state
